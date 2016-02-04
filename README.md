@@ -9,6 +9,7 @@ Running
 -------
 
 You will need:
+
 1. A text file with some data (you can use `tinyshakespeare.txt` from the `data/` folder)
 2. A machine with installed TensorFlow
 3. (optional but highly recommended) a GPU on the machine where TensorFlow is installed
