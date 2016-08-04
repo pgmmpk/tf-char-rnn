@@ -26,7 +26,7 @@ Monitoring training and validation losses
 
 Start TensorBoard server
 ```bash
-python /usr/local/lib/python2.7/dist-packages/tensorflow/tensorboard/tensorboard.py .
+python -m tensorflow.tensorboard.tensorboard `pwd`
 ```
 
 Use web browser to connect to the TensorBoard server and see computational graph and plots of training and validation losses.

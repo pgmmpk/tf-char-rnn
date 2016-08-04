@@ -23,21 +23,22 @@ flags.DEFINE_string ('input_data',     None,  'filename of the input data')
 flags.DEFINE_string ('train_dir',      None,  'training directory (models and summaries are saved there periodically)')
 flags.DEFINE_string ('load_model',     None,  '(optional) filename of the model to load')
 
-flags.DEFINE_integer('num_layers',     2,     'number of layers')
-flags.DEFINE_integer('hidden_size',    128,   'size of one neural layer')
+flags.DEFINE_integer('num_layers',     3,     'number of layers (default 3)')
+flags.DEFINE_integer('hidden_size',    256,   'size of one neural layer (default 256)')
+flags.DEFINE_integer('vocab_size',     128,   'size of vocabulary (default 128)')
 
-flags.DEFINE_integer('batch_size',     50,    'minibatch size')
-flags.DEFINE_integer('num_steps',      50,    'number of steps to unroll RNN in time')
-flags.DEFINE_integer('max_epochs',     5,     'max number of training epochs')
-flags.DEFINE_integer('eval_val_every', 1000,  'how often to evaluate on the validation set')
-flags.DEFINE_float  ('train_fraction', 0.95,  'fraction of data used for training')
-flags.DEFINE_float  ('valid_fraction', 0.05,  'fraction of data used for validation')
-flags.DEFINE_float  ('init_scale',     0.1,   'scale of initial uniform random initialization of model parameters.')
-flags.DEFINE_float  ('dropout_rate',   0.0,   'dropout rate (0 means - no dropout)')
-flags.DEFINE_float  ('grad_clip',      5.0,   'clip gradients')
-flags.DEFINE_float  ('learning_rate',  0.002, 'Adam\'s learning rate')
-flags.DEFINE_float  ('beta1',          0.0,   'Adam\'s learning parameter "beta1"')
-flags.DEFINE_float  ('beta2',          0.95,  'Adam\'s learning parameter "beta2"')
+flags.DEFINE_integer('batch_size',     50,    'minibatch size (default 50)')
+flags.DEFINE_integer('num_steps',      200,   'number of steps to unroll RNN in time (default 200)')
+flags.DEFINE_integer('max_epochs',     5,     'max number of training epochs (default 5)')
+flags.DEFINE_integer('eval_val_every', 1000,  'how often to evaluate on the validation set (default every 1000 steps)')
+flags.DEFINE_float  ('train_fraction', 0.95,  'fraction of data used for training (default 0.95)')
+flags.DEFINE_float  ('valid_fraction', 0.05,  'fraction of data used for validation (default 0.05)')
+flags.DEFINE_float  ('init_scale',     0.1,   'scale of initial uniform random initialization of model parameters (default 0.1).')
+flags.DEFINE_float  ('dropout_rate',   0.0,   'dropout rate (0 means - no dropout, default 0)')
+flags.DEFINE_float  ('grad_clip',      5.0,   'clip gradients (default 5.0)')
+flags.DEFINE_float  ('learning_rate',  0.002, 'Adam\'s learning rate (default 0.002)')
+flags.DEFINE_float  ('beta1',          0.0,   'Adam\'s learning parameter "beta1" (default 0.0)')
+flags.DEFINE_float  ('beta2',          0.95,  'Adam\'s learning parameter "beta2" (default 0.95)')
 
 FLAGS = flags.FLAGS
 
@@ -47,7 +48,7 @@ def run_test(session, m, data, batch_size, num_steps):
 
     costs = 0.0
     iters = 0
-    state = m.initial_state.eval()
+    state = session.run(m.initial_state)
   
     for step, (x, y) in enumerate(reader.dataset_iterator(data, batch_size, num_steps)):
         cost, state = session.run([m.cost, m.final_state], {
@@ -94,7 +95,7 @@ def main(unused_args):
                 vocab = Vocab.from_array(vocab_var.eval())
                 train_data, valid_data, test_data, vocab = reader.read_datasets(FLAGS.input_data, FLAGS.train_fraction, FLAGS.valid_fraction, vocab=vocab)
             else:
-                train_data, valid_data, test_data, vocab = reader.read_datasets(FLAGS.input_data, FLAGS.train_fraction, FLAGS.valid_fraction)
+                train_data, valid_data, test_data, vocab = reader.read_datasets(FLAGS.input_data, FLAGS.train_fraction, FLAGS.valid_fraction, vocab_size=FLAGS.vocab_size)
                 vocab_size_var = tf.Variable(vocab.size, trainable=False, name='vocab_size')
                 vocab_var = tf.Variable(vocab.to_array(), trainable=False, name='vocab')
 
@@ -137,7 +138,7 @@ def main(unused_args):
         print()
         
         ''' create two summaries: training cost and validation cost '''
-        summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, graph_def=session.graph_def)
+        summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, graph=session.graph)
         summary_train = summary_graph('Training cost', ema_decay=0.95)
         summary_valid = summary_graph('Validation cost')
         
@@ -155,7 +156,7 @@ def main(unused_args):
             tf.assign(m.beta2, FLAGS.beta2),
         ])
 
-        state = m.initial_state.eval()
+        state = session.run(m.initial_state)
         iterations = len(train_data) // FLAGS.batch_size // FLAGS.num_steps * FLAGS.max_epochs
         for i, (x, y) in enumerate(reader.next_batch(train_data, FLAGS.batch_size, FLAGS.num_steps)):
             if i >= iterations:
@@ -175,7 +176,7 @@ def main(unused_args):
             
             session.run([summary_train.update], {summary_train.x: cost})
         
-            if i % FLAGS.eval_val_every == 20 or i == iterations-1:
+            if (i+1) % FLAGS.eval_val_every == 0 or i == iterations-1:
                 # evaluate loss on validation data
                 cost = run_test(session, mvalid, valid_data, FLAGS.batch_size, FLAGS.num_steps)
                 print("validation cost = %6.8f" % cost)

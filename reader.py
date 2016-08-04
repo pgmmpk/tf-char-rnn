@@ -14,7 +14,7 @@ import tensorflow as tf
 from vocab import Vocab
 
 
-def read_datasets(input_data, train_fraction=0.95, valid_fraction=0.05, vocab=None):
+def read_datasets(input_data, train_fraction=0.95, valid_fraction=0.05, vocab=None, vocab_size=128):
 
     print('Reading data from', input_data, '...')
     
@@ -22,7 +22,7 @@ def read_datasets(input_data, train_fraction=0.95, valid_fraction=0.05, vocab=No
         data = f.read()
 
     if vocab is None:
-        vocab = Vocab.from_data(data)
+        vocab = Vocab.from_data(data, vocab_size=vocab_size)
     
     train_size = int(math.floor(len(data) * train_fraction))
     valid_size = int(math.floor(len(data) * valid_fraction))

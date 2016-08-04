@@ -56,7 +56,7 @@ def main(unused_args):
         tf.train.Saver().restore(session, FLAGS.load_model)
         
         logits = np.ones((vocab.size,))
-        state = m.initial_state.eval()
+        state = session.run(m.initial_state)
         for i in range(FLAGS.sample_size):
             logits = logits / FLAGS.temperature
             prob = np.exp(logits)

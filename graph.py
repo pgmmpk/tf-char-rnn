@@ -4,10 +4,6 @@ from __future__ import division
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.models.rnn import rnn
-from tensorflow.models.rnn import rnn_cell
-from tensorflow.models.rnn import seq2seq
-
 
 class adict(dict):
     ''' Attribute dictionary - a convenience data structure, similar to SimpleNamespace in python 3.3
@@ -23,10 +19,10 @@ def inference_graph(vocab_size=164, num_layers=3, hidden_size=256, batch_size=1,
 
     input_data = tf.placeholder(tf.int32, [batch_size, num_steps])
 
-    lstm_cell = rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0)
+    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0, state_is_tuple=True)
     if dropout_rate > 0:
-        lstm_cell = rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=1-dropout_rate)
-    cell = rnn_cell.MultiRNNCell([lstm_cell] * num_layers)
+        lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=1-dropout_rate)
+    cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * num_layers, state_is_tuple=True)
 
     initial_state = cell.zero_state(batch_size, tf.float32)
 
@@ -38,13 +34,12 @@ def inference_graph(vocab_size=164, num_layers=3, hidden_size=256, batch_size=1,
     if dropout_rate > 0:
         inputs = [tf.nn.dropout(input_, 1-dropout_rate) for input_ in inputs]
 
-    outputs, states = rnn.rnn(cell, inputs, initial_state=initial_state)
+    outputs, final_state = tf.nn.rnn(cell, inputs, initial_state=initial_state)
 
     output = tf.reshape(tf.concat(1, outputs), [-1, hidden_size])
     logits = tf.nn.xw_plus_b(output,
                              tf.get_variable("softmax_w", [hidden_size, vocab_size]),
                              tf.get_variable("softmax_b", [vocab_size]))
-    final_state = states[-1]
     
     return adict(
         input_data=input_data,
@@ -58,7 +53,7 @@ def cost_graph(logits, batch_size, num_steps, vocab_size):
     
     targets = tf.placeholder(tf.int32, [batch_size, num_steps], name='targets')
     
-    loss = seq2seq.sequence_loss_by_example([logits],
+    loss = tf.nn.seq2seq.sequence_loss_by_example([logits],
                                             [tf.reshape(targets, [-1])],
                                             [tf.ones([batch_size * num_steps])],
                                             vocab_size)
