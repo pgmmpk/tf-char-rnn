@@ -6,16 +6,16 @@ def summary_graph(tag, ema_decay=0):
     """
     Usage:
         sg = summary_graph('Training cost', ema_decay=0.95)
-        
+
         while training:
             ...
-            
+
             session.run([sg.update], {sg.x: cost})  # accumulate data here
-            summary_writer.add_summary( 
+            summary_writer.add_summary(
     """
-    
+
     x = tf.placeholder(tf.float32, [])
-    
+
     if ema_decay == 0:
         var = tf.Variable(0.0, trainable=False)
         update = tf.assign(var, x)
@@ -23,9 +23,9 @@ def summary_graph(tag, ema_decay=0):
         ema = tf.train.ExponentialMovingAverage(decay=ema_decay)
         update = ema.apply([x])
         var = ema.average(x)
-        
-    summary = tf.scalar_summary(tag, var)
-    
+
+    summary = tf.summary.scalar(tag, var)
+
     return adict(
         x=x,
         update=update,

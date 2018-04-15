@@ -11,22 +11,31 @@ Running
 You will need:
 
 1. A text file with some data (you can use `tinyshakespeare.txt` from the `data/` folder)
-2. A machine with installed TensorFlow
-3. (optional but highly recommended) a GPU on the machine where TensorFlow is installed
+2. A machine with installed Python 3
+3. (optional but highly recommended) a GPU on this
+
+
+Configure and use virtual environment, install required packages:
+```!bash
+virtualenv .venv -p python3
+. .venv/bin/activate
+pip install -r requirements.txt
+pip install tensorflow  # or tensorflow-gpu, if you have GPU
+```
 
 Training
 --------
 
-```bash
-python train.py -i data/tinyshakespeare.txt -o tinyshakespeare
+```!bash
+python train.py --input_data data/tinyshakespeare.txt --train_dir tinyshakespeare
 ```
 
 Monitoring training and validation losses
 -----------------------------------------
 
 Start TensorBoard server
-```bash
-python -m tensorflow.tensorboard.tensorboard `pwd`
+```!bash
+python -m tensorflow.tensorboard.tensorboard --logdir `pwd`
 ```
 
 Use web browser to connect to the TensorBoard server and see computational graph and plots of training and validation losses.
@@ -35,6 +44,6 @@ Use web browser to connect to the TensorBoard server and see computational graph
 Sampling
 --------
 
-```bash
-python sample.py -m tinyshakespeare/lm_10000.model -t "O thy!"
+```!bash
+python sample.py --load_model tinyshakespeare/lm_10000.model --prefix 'O thy!'
 ```

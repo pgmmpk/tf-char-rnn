@@ -19,28 +19,26 @@ def inference_graph(vocab_size=164, num_layers=3, hidden_size=256, batch_size=1,
 
     input_data = tf.placeholder(tf.int32, [batch_size, num_steps])
 
-    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0, state_is_tuple=True)
+    lstm_cell = lambda: tf.contrib.rnn.BasicLSTMCell(hidden_size, forget_bias=1.0, state_is_tuple=True)
     if dropout_rate > 0:
         lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=1-dropout_rate)
-    cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * num_layers, state_is_tuple=True)
+    cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell() for _ in range(num_layers)], state_is_tuple=True)
 
     initial_state = cell.zero_state(batch_size, tf.float32)
 
     with tf.device("/cpu:0"):
         embedding = tf.get_variable("embedding", [vocab_size, hidden_size])
-        inputs = tf.split(1, num_steps, tf.nn.embedding_lookup(embedding, input_data))
-        inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        inputs = tf.nn.embedding_lookup(embedding, input_data)
 
     if dropout_rate > 0:
-        inputs = [tf.nn.dropout(input_, 1-dropout_rate) for input_ in inputs]
+        inputs = tf.nn.dropout(inputs, 1-dropout_rate)
 
-    outputs, final_state = tf.nn.rnn(cell, inputs, initial_state=initial_state)
+    output, final_state = tf.nn.dynamic_rnn(cell, inputs, initial_state=initial_state)
+    logits = tf.tensordot(output,
+        tf.get_variable("softmax_w", [hidden_size, vocab_size]),
+        [[2], [0]]
+    )
 
-    output = tf.reshape(tf.concat(1, outputs), [-1, hidden_size])
-    logits = tf.nn.xw_plus_b(output,
-                             tf.get_variable("softmax_w", [hidden_size, vocab_size]),
-                             tf.get_variable("softmax_b", [vocab_size]))
-    
     return adict(
         input_data=input_data,
         initial_state=initial_state,
@@ -50,15 +48,16 @@ def inference_graph(vocab_size=164, num_layers=3, hidden_size=256, batch_size=1,
 
 def cost_graph(logits, batch_size, num_steps, vocab_size):
     ''' Builds cost graph. '''
-    
+
     targets = tf.placeholder(tf.int32, [batch_size, num_steps], name='targets')
-    
-    loss = tf.nn.seq2seq.sequence_loss_by_example([logits],
-                                            [tf.reshape(targets, [-1])],
-                                            [tf.ones([batch_size * num_steps])],
-                                            vocab_size)
+
+    loss = tf.contrib.seq2seq.sequence_loss(logits,
+                                            targets,
+                                            tf.ones([batch_size, num_steps]),
+                                            average_across_timesteps=False,
+                                            average_across_batch=False)
     cost = tf.div(tf.reduce_sum(loss), batch_size * num_steps, name='cost')
-    
+
     return adict(
         targets=targets,
         cost=cost)
@@ -74,7 +73,7 @@ def training_graph(cost, grad_clip=5.0):
 
     # collect all trainable variables
     tvars = tf.trainable_variables()
-    
+
     grads = [tf.clip_by_value(t, -grad_clip, grad_clip) for t in tf.gradients(cost, tvars)]
 
     optimizer = tf.train.AdamOptimizer(lr, beta1, beta2)
@@ -85,7 +84,7 @@ def training_graph(cost, grad_clip=5.0):
         beta1=beta1,
         beta2=beta2,
 
-        tvars=tvars,        
+        tvars=tvars,
         grads=grads,
-        
+
         train_op=train_op)

@@ -25,7 +25,7 @@ flags.DEFINE_string ('load_model',     None,  '(optional) filename of the model 
 
 flags.DEFINE_integer('num_layers',     3,     'number of layers (default 3)')
 flags.DEFINE_integer('hidden_size',    256,   'size of one neural layer (default 256)')
-flags.DEFINE_integer('vocab_size',     128,   'size of vocabulary (default 128)')
+flags.DEFINE_integer('vocab_size',     256,   'size of vocabulary (default 256)')
 
 flags.DEFINE_integer('batch_size',     50,    'minibatch size (default 50)')
 flags.DEFINE_integer('num_steps',      200,   'number of steps to unroll RNN in time (default 200)')
@@ -49,19 +49,19 @@ def run_test(session, m, data, batch_size, num_steps):
     costs = 0.0
     iters = 0
     state = session.run(m.initial_state)
-  
+
     for step, (x, y) in enumerate(reader.dataset_iterator(data, batch_size, num_steps)):
         cost, state = session.run([m.cost, m.final_state], {
             m.input_data: x,
             m.targets: y,
             m.initial_state: state
         })
-        
+
         costs += cost
         iters += 1
 
     return costs / iters
-  
+
 
 def main(unused_args):
     ''' Trains model from data '''
@@ -81,17 +81,17 @@ def main(unused_args):
         with tf.variable_scope("params", reuse=None):
             num_layers_var = tf.Variable(FLAGS.num_layers, trainable=False, name='num_layers')
             hidden_size_var = tf.Variable(FLAGS.hidden_size, trainable=False, name='hidden_size')
-        
-            ''' If pre-trained model loaded from file, use loaded vocabulary and NN geometry. Else, compute vocabulary and use command-line params for num_layers and hidden_size ''' 
+
+            ''' If pre-trained model loaded from file, use loaded vocabulary and NN geometry. Else, compute vocabulary and use command-line params for num_layers and hidden_size '''
             if FLAGS.load_model:
                 vocab_size_var = tf.Variable(0, trainable=False, name='vocab_size')
                 tf.train.Saver([num_layers_var, hidden_size_var, vocab_size_var]).restore(session, FLAGS.load_model)
                 vocab_var = tf.Variable([0] * vocab_size_var.eval(), trainable=False, name='vocab')
                 tf.train.Saver([vocab_var]).restore(session, FLAGS.load_model)
-    
+
                 FLAGS.num_layers = np.asscalar(num_layers_var.eval())  # need np.asscalar to upcast np.int32 to Python int
                 FLAGS.hidden_size = np.asscalar(hidden_size_var.eval())
-                
+
                 vocab = Vocab.from_array(vocab_var.eval())
                 train_data, valid_data, test_data, vocab = reader.read_datasets(FLAGS.input_data, FLAGS.train_fraction, FLAGS.valid_fraction, vocab=vocab)
             else:
@@ -106,7 +106,7 @@ def main(unused_args):
             m.update(graph.cost_graph(m.logits, FLAGS.batch_size, FLAGS.num_steps, vocab.size))
             m.update(graph.training_graph(m.cost, FLAGS.grad_clip))
 
-        # create saver before creating more graph nodes, so that we do not save any vars defined below      
+        # create saver before creating more graph nodes, so that we do not save any vars defined below
         saver = tf.train.Saver(max_to_keep=50)
 
         ''' build graph for validation and testing (shares parameters with the training graph!) '''
@@ -119,7 +119,7 @@ def main(unused_args):
             print('Loaded model from', FLAGS.load_model)
         else:
             print('Created model')
-        
+
         print('\tnum_layers:', FLAGS.num_layers)
         print('\thidden_size:', FLAGS.hidden_size)
         print('\tvocab_size:', vocab.size)
@@ -136,12 +136,12 @@ def main(unused_args):
         print('\tvalidation dataset size:', len(valid_data))
         print('\ttest dataset size:', len(test_data))
         print()
-        
+
         ''' create two summaries: training cost and validation cost '''
-        summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, graph=session.graph)
+        summary_writer = tf.summary.FileWriter(FLAGS.train_dir, graph=session.graph)
         summary_train = summary_graph('Training cost', ema_decay=0.95)
         summary_valid = summary_graph('Validation cost')
-        
+
         session.run([
             m.lr.initializer,
             m.beta1.initializer,
@@ -149,7 +149,7 @@ def main(unused_args):
         ])
 
         tf.initialize_all_variables().run()
-        
+
         session.run([
             tf.assign(m.lr, FLAGS.learning_rate),
             tf.assign(m.beta1, FLAGS.beta1),
@@ -161,21 +161,21 @@ def main(unused_args):
         for i, (x, y) in enumerate(reader.next_batch(train_data, FLAGS.batch_size, FLAGS.num_steps)):
             if i >= iterations:
                 break
-        
+
             start_time = time.time()
-        
+
             cost, state, _ = session.run([m.cost, m.final_state, m.train_op], {
                     m.input_data: x,
                     m.targets: y,
                     m.initial_state: state
             })
-        
+
             epoch = float(i) / (len(train_data) // FLAGS.batch_size // FLAGS.num_steps)
             time_elapsed = time.time() - start_time
             print('%d/%d (epoch %.3f), train_loss = %6.8f, time/batch = %.4fs' % (i+1, iterations, epoch, cost, time_elapsed))
-            
+
             session.run([summary_train.update], {summary_train.x: cost})
-        
+
             if (i+1) % FLAGS.eval_val_every == 0 or i == iterations-1:
                 # evaluate loss on validation data
                 cost = run_test(session, mvalid, valid_data, FLAGS.batch_size, FLAGS.num_steps)
@@ -186,13 +186,13 @@ def main(unused_args):
                 ''' write out summary events '''
                 buffer, = session.run([summary_train.summary])
                 summary_writer.add_summary(buffer, i)
-                
+
                 session.run([summary_valid.update], {summary_valid.x: cost})
                 buffer, = session.run([summary_valid.summary])
                 summary_writer.add_summary(buffer, i)
-                
+
                 summary_writer.flush()
-        
+
         if len(test_data) > FLAGS.batch_size * FLAGS.num_steps:
             cost = run_test(session, mvalid, test_data, FLAGS.batch_size, FLAGS.num_steps)
             print("Test cost: %.3f" % test_loss)
